@@ -1,0 +1,182 @@
+#! /bin/bash
+# Winbox Installer
+# Coded By Arikun - IndoSec <arifarhan1602@gmail.com>
+# Easy To Install WinBox in Linux
+
+welcome() {
+  banner
+  echo "
+To install
+sudo bash setup install
+sudo ./setup install
+
+To remove
+sudo bash setup uninstall
+sduo ./setup uninstall"
+
+  exit 1
+}
+
+# Installing Wine
+wineCheck() {
+  CHECK_LINUX=`sed "/^ID/s/ID=//gp" -n /etc/os-release`
+  echo -n "Wine is not installed. Installing wine and dependencies..."
+  case $CHECK_LINUX in
+    'fedora' | '"rhel"' | '"centos"' | '"IGN"' )
+      dnf -q -y install wine wget curl > /dev/null 2>&1 || yum -q -y install wine wget curl > /dev/null 2>&1
+      echo "DONE"
+    ;;
+    'ubuntu' | 'debian' | '"elementary"' | 'zorin' | 'linuxmint' | 'kali' | 'neon' | 'pop' | 'Deepin')
+      if [ -f /etc/os-release ]
+      then
+        source /etc/os-release
+      fi
+
+      if [ $(echo $VERSION_ID | awk '{printf "%1.0f",$1}') -ge 18 ]
+      then
+        WINEPKG="wine-stable"
+      else
+        WINEPKG="wine"
+      fi
+      apt-get -q -y install $WINEPKG wget curl > /dev/null 2>&1
+      echo "DONE"
+    ;;
+    'arch' )
+      sed -i "/\[multilib\]/,/Include/"'s/^#//' /etc/pacman.conf
+      pacman -Sy
+      pacman -Sq --noconfirm wine wget curl > /dev/null 2>&1
+      echo "DONE"
+    ;;
+    *)
+      echo "FAILED"
+      exit 1
+    ;;
+  esac
+}
+
+# Download versi terakhir dari situs resmi mikrotik.
+w_download() {
+  if [[ -f winbox.exe ]]
+  then
+    echo "Using previously downloaded winbox.exe"
+  else
+    echo -n "Downloading Winbox..."
+
+    URL="https://mt.lv/winbox"
+    if [[ $(uname -a | grep -o "x86_64") ]]; then
+      URL=${URL}64
+    fi
+
+    wget -q -c -O winbox.exe $URL
+    echo "DONE"
+  fi
+}
+
+copy_file() {
+  echo -n "Copying files..."
+  if [[ !$(mkdir -p /usr/local/bin) ]]
+  then
+    if [[ !$(cp -f winbox.exe /usr/local/bin/winbox.exe) ]]
+    then
+    	cp -f winbox.sh /usr/local/bin/winbox.sh
+    	chmod a+x /usr/local/bin/winbox.sh
+	    chmod a+x /usr/local/bin/winbox.exe
+	    for size in $( ls -1 icons/winbox-*.png | cut -d\- -f2 | cut -d\. -f1 | paste -sd ' ') ; do
+		    mkdir -p /usr/share/icons/hicolor/${size}/apps/
+		    cp -f icons/winbox-${size}.png /usr/share/icons/hicolor/${size}/apps/winbox.png
+	    done
+      echo "DONE"
+    else
+      echo "FAILED"
+      exit 1
+    fi
+  else
+    echo "FAILED"
+    exit 1
+  fi
+}
+
+make_launcher() {
+  echo -n "Creating application launcher..."
+  if touch /usr/share/applications/winbox.desktop
+  then
+    echo "[Desktop Entry]" > /usr/share/applications/winbox.desktop
+    echo "Name=Winbox" >> /usr/share/applications/winbox.desktop
+    echo "GenericName=Configuration tool for RouterOS" >> /usr/share/applications/winbox.desktop
+    echo "Comment=Configuration tool for RouterOS" >> /usr/share/applications/winbox.desktop
+    echo "Exec=/usr/local/bin/winbox.sh" >> /usr/share/applications/winbox.desktop
+    echo "Icon=winbox" >> /usr/share/applications/winbox.desktop
+    echo "Terminal=false" >> /usr/share/applications/winbox.desktop
+    echo "Type=Application" >> /usr/share/applications/winbox.desktop
+    echo "StartupNotify=true" >> /usr/share/applications/winbox.desktop
+    echo "StartupWMClass=winbox.exe" >> /usr/share/applications/winbox.desktop
+    echo "Categories=Network;RemoteAccess;" >> /usr/share/applications/winbox.desktop
+    echo "Keywords=winbox;mikrotik;" >> /usr/share/applications/winbox.desktop
+    xdg-desktop-menu forceupdate --mode system
+    echo "DONE"
+  else
+    echo "FAILED"
+    exit 1
+  fi
+}
+
+uninstall_winbox() {
+  echo -n "Removing launcher..."
+  find /usr/share/applications/ -name "winbox.desktop" -delete
+  echo "DONE"
+
+  echo -n "Removing icons..."
+  find /usr/share/icons -name "winbox.png" -delete
+  echo "DONE"
+
+  echo -n "Removing files..."
+  rm -rf /usr/local/bin/winbox.exe
+  rm -rf /usr/local/bin/winbox.sh
+  echo "DONE"
+}
+
+banner() {
+  echo "
+  _      _______  ______
+ | | /| / /  _/ |/ / __/ Winbox Installer
+ | |/ |/ // //    /\ \   Coded By Ariikun - IndoSec
+ |__/|__/___/_/|_/___/   V.0.1
+ 
+ "
+}
+
+if [ -z "$1" ]; then
+  welcome;
+fi
+case $1 in
+  'install' )
+    if [[ ! $(wine --version) ]]
+    then
+        banner
+        wineCheck
+    fi
+    if w_download
+    then
+      if copy_file
+      then
+        make_launcher
+      else
+        echo "FAILED"
+        exit 1
+      fi
+    else
+      echo "FAILED"
+      exit 1
+    fi
+  ;;
+
+  'uninstall' )
+  banner
+    uninstall_winbox
+  ;;
+
+  * )
+    banner
+    welcome
+  ;;
+esac
